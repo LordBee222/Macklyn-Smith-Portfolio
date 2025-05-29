@@ -1,0 +1,4 @@
+Version v0.0.1:
+
+New Additions:
+    - Initial Commit, created index.html, README.md & setup.js with relevant paths.
