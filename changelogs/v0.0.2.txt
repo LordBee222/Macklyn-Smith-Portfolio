@@ -1,0 +1,4 @@
+Version v0.0.1:
+
+New Additions:
+    - Added Screen.js and ScreenManager.js, still very much a work in progress
