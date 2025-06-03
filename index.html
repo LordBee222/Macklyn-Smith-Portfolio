@@ -1,35 +1,210 @@
-<!DOCTYPE html>
+-<!--<!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <title>Setup Form</title>
-    </head>
-    <body>
-        <div id="d_content">
-            <section id="s_home">
-                <h1>Hi, I'm Macklyn Smith</h1>
-                <p>Welcome to my personal website!</p>
-                <p>This is a simple setup form to get you started.</p>
-            </section>
-            <section id="s_about">
-                <h2>About Me</h2>
-                <p>I am a software developer with a passion for creating web applications.</p>
-                <p>Feel free to explore my projects and get in touch!</p>
-            </section>
-            <section id="s_projects">
-                <h2>My Projects</h2>
-                <ul>
-                    <li>Project 1: A web application for task management.</li>
-                    <li>Project 2: A personal blog platform.</li>
-                    <li>Project 3: An e-commerce site for handmade crafts.</li>
-                </ul>
-            </section>
-            <section id="s_contact">
-                <h2>Contact Me</h2>
-                <p>If you have any questions or want to collaborate, feel free to reach out!</p>
-                <p>Email:</p>
-            </section>
-        </div>
-        <script type="module" src="net\src\js\setup.js"></script>
-    </body>
+<head>
+  <meta charset="UTF-8" />
+  <title>My Portfolio</title>
+</head>
+<body>
+  <nav>
+    <button id="homeBtn">Home</button>
+    <button id="aboutBtn">About</button>
+    <button id="projectsBtn">Projects</button>
+  </nav>
+  <main id="app"></main>
+
+  <script type="module" src="./net/src/js/setup.js"></script>
+</body>
+</html>-->
+
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Editable Firebase User Table</title>
+  <style>
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      table-layout: fixed;
+    }
+    th, td {
+      border: 1px solid #999;
+      padding: 8px;
+      text-align: left;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+    td {
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+    td.orange { background-color: orange; }
+    td.green { background-color: lightgreen; }
+    td.red { background-color: #f66; }
+    input {
+      width: 100%;
+      box-sizing: border-box;
+      font: inherit;
+      padding: 0;
+      margin: 0;
+      border: none;
+      background-color: transparent;
+    }
+    input:focus {
+      outline: none;
+      border-bottom: 1px solid #333;
+    }
+  </style>
+</head>
+<body>
+  <h2>User List</h2>
+  <button id="saveAllBtn">Save All Changes</button>
+  <table id="user-table"></table>
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+  <script>
+    const dirtyCells = new Set();
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCdL3z6IHy7DtI8DTZ6YfjIZQzH7Rv-ass",
+      authDomain: "comp-2025-mac-smith.firebaseapp.com",
+      databaseURL: "https://comp-2025-mac-smith-default-rtdb.firebaseio.com",
+      projectId: "comp-2025-mac-smith",
+      storageBucket: "comp-2025-mac-smith.appspot.com",
+      messagingSenderId: "578573693168",
+      appId: "1:578573693168:web:b8caeb7fac0974bce85235",
+      measurementId: "G-PBXMJXF7MW"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const usersRef = db.ref("/users");
+
+    function createEditableCell(uid, field, value) {
+      const td = document.createElement("td");
+      td.dataset.field = field;  // Set data-field
+      td.textContent = value ?? "";
+
+      let originalValue = td.textContent;
+      let currentValue = originalValue;
+
+      td.addEventListener("click", () => {
+        if (td.querySelector("input")) return;
+
+        const input = document.createElement("input");
+        input.value = currentValue;
+        td.textContent = "";
+        td.appendChild(input);
+        input.focus();
+
+        input.addEventListener("input", () => {
+          currentValue = input.value;
+          if (currentValue !== originalValue) {
+            td.classList.add("orange");
+            dirtyCells.add(td);
+          } else {
+            td.classList.remove("orange");
+            dirtyCells.delete(td);
+          }
+        });
+
+        input.addEventListener("blur", () => {
+          td.textContent = currentValue;
+          if (currentValue !== originalValue) {
+            td.classList.add("orange");
+            dirtyCells.add(td);
+          } else {
+            td.classList.remove("orange");
+            dirtyCells.delete(td);
+          }
+        });
+
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            usersRef.child(uid).update({ [field]: currentValue })
+              .then(() => {
+                originalValue = currentValue;
+                td.textContent = currentValue;
+                td.classList.remove("orange", "red");
+                td.classList.add("green");
+                dirtyCells.delete(td);
+
+                setTimeout(() => {
+                  td.classList.remove("green");
+                }, 1000);
+              })
+              .catch(() => {
+                td.classList.remove("orange");
+                td.classList.add("red");
+              });
+          }
+        });
+      });
+
+      return td;
+    }
+
+    document.getElementById("saveAllBtn").addEventListener("click", () => {
+      dirtyCells.forEach(td => {
+        const uid = td.parentNode.dataset.uid;
+        const field = td.dataset.field;
+        const value = td.textContent;
+
+        if (!uid || !field) return;
+
+        td.classList.add("green");
+
+        usersRef.child(uid).update({ [field]: value })
+          .then(() => {
+            td.classList.remove("orange");
+            td.classList.remove("red");
+            setTimeout(() => td.classList.remove("green"), 1000);
+            dirtyCells.delete(td);
+          })
+          .catch(() => {
+            td.classList.remove("orange");
+            td.classList.add("red");
+          });
+      });
+    });
+
+    function loadUsers() {
+      usersRef.on("value", (snapshot) => {
+        const users = snapshot.val();
+        const table = document.getElementById("user-table");
+        table.innerHTML = "";
+
+        const headerRow = document.createElement("tr");
+        ["UID", "Display Name", "Email", "Gender", "Address"].forEach(text => {
+          const th = document.createElement("th");
+          th.textContent = text;
+          headerRow.appendChild(th);
+        });
+        table.appendChild(headerRow);
+
+        for (const uid in users) {
+          const user = users[uid];
+          const row = document.createElement("tr");
+          row.dataset.uid = uid; // Set UID for reference later
+
+          const uidTd = document.createElement("td");
+          uidTd.textContent = uid;
+          row.appendChild(uidTd);
+
+          row.appendChild(createEditableCell(uid, "displayName", user.displayName));
+          row.appendChild(createEditableCell(uid, "email", user.email));
+          row.appendChild(createEditableCell(uid, "gender", user.gender));
+          row.appendChild(createEditableCell(uid, "address", user.address));
+
+          table.appendChild(row);
+        }
+      });
+    }
+
+    loadUsers();
+  </script>
+</body>
 </html>
+

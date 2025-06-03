@@ -1,50 +1,14 @@
 export default class ScreenManager {
-  constructor() {
-    this.screens = {};
+  constructor(appElement) {
+    this.app = appElement;
     this.currentScreen = null;
   }
 
-  renderScreen(_screen) {
-    switch (_screen) {
-      case "login":
-        this.setCurrentScreen("login");
-        break;
-      case "register":
-        this.setCurrentScreen("register");
-        break;
-      case "home":
-        this.setCurrentScreen("home");
-        break;
-      case "settings":
-        this.setCurrentScreen("settings");
-        break;
-      default:
-        console.error(`Unknown screen: ${_screen}`);
-        break;
-    }
-  }
-
-  addScreen(name, screen) {
-    this.screens[name] = screen;
-  }
-
-  removeScreen(name) {
-    delete this.screens[name];
-  }
-
-  setCurrentScreen(name) {
+  setScreen(ScreenClass) {
     if (this.currentScreen) {
-      this.currentScreen.hide();
+      this.currentScreen.unmount();
     }
-    this.currentScreen = this.screens[name];
-    if (this.currentScreen) {
-      this.currentScreen.show();
-    }
+    this.currentScreen = new ScreenClass();
+    this.currentScreen.mount(this.app);
   }
-
-  getCurrentScreen() {
-    return this.currentScreen;
-  }
-
-  getElement(_id){return document.getElementById(_id);}
 }
