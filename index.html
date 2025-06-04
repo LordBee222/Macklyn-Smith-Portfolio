@@ -66,6 +66,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
   <script>
     const dirtyCells = new Set();
+    const dirtyValues = new Map();
 
     const firebaseConfig = {
       apiKey: "AIzaSyCdL3z6IHy7DtI8DTZ6YfjIZQzH7Rv-ass",
@@ -84,11 +85,19 @@
 
     function createEditableCell(uid, field, value) {
       const td = document.createElement("td");
-      td.dataset.field = field;  // Set data-field
-      td.textContent = value ?? "";
+      td.dataset.field = field;
+      td.dataset.uid = uid;
 
-      let originalValue = td.textContent;
-      let currentValue = originalValue;
+      const key = `${uid}:${field}`;
+      let originalValue = value ?? "";
+      let currentValue = dirtyValues.has(key) ? dirtyValues.get(key) : originalValue;
+
+      td.textContent = currentValue;
+
+      if (dirtyValues.has(key)) {
+        td.classList.add("orange");
+        dirtyCells.add(td);
+      }
 
       td.addEventListener("click", () => {
         if (td.querySelector("input")) return;
@@ -104,9 +113,11 @@
           if (currentValue !== originalValue) {
             td.classList.add("orange");
             dirtyCells.add(td);
+            dirtyValues.set(key, currentValue);
           } else {
             td.classList.remove("orange");
             dirtyCells.delete(td);
+            dirtyValues.delete(key);
           }
         });
 
@@ -115,9 +126,11 @@
           if (currentValue !== originalValue) {
             td.classList.add("orange");
             dirtyCells.add(td);
+            dirtyValues.set(key, currentValue);
           } else {
             td.classList.remove("orange");
             dirtyCells.delete(td);
+            dirtyValues.delete(key);
           }
         });
 
@@ -130,10 +143,8 @@
                 td.classList.remove("orange", "red");
                 td.classList.add("green");
                 dirtyCells.delete(td);
-
-                setTimeout(() => {
-                  td.classList.remove("green");
-                }, 1000);
+                dirtyValues.delete(key);
+                setTimeout(() => td.classList.remove("green"), 1000);
               })
               .catch(() => {
                 td.classList.remove("orange");
@@ -146,22 +157,50 @@
       return td;
     }
 
+    function renderUsers(users) {
+      const table = document.getElementById("user-table");
+      table.innerHTML = "";
+
+      const headerRow = document.createElement("tr");
+      ["UID", "Display Name", "Email", "Gender", "Address"].forEach(text => {
+        const th = document.createElement("th");
+        th.textContent = text;
+        headerRow.appendChild(th);
+      });
+      table.appendChild(headerRow);
+
+      for (const uid in users) {
+        const user = users[uid];
+        const row = document.createElement("tr");
+        row.dataset.uid = uid;
+
+        const uidTd = document.createElement("td");
+        uidTd.textContent = uid;
+        row.appendChild(uidTd);
+
+        row.appendChild(createEditableCell(uid, "displayName", user.displayName));
+        row.appendChild(createEditableCell(uid, "email", user.email));
+        row.appendChild(createEditableCell(uid, "gender", user.gender));
+        row.appendChild(createEditableCell(uid, "address", user.address));
+
+        table.appendChild(row);
+      }
+    }
+
     document.getElementById("saveAllBtn").addEventListener("click", () => {
       dirtyCells.forEach(td => {
-        const uid = td.parentNode.dataset.uid;
+        const uid = td.dataset.uid;
         const field = td.dataset.field;
-        const value = td.textContent;
-
-        if (!uid || !field) return;
-
-        td.classList.add("green");
+        const key = `${uid}:${field}`;
+        const value = dirtyValues.get(key);
 
         usersRef.child(uid).update({ [field]: value })
           .then(() => {
-            td.classList.remove("orange");
-            td.classList.remove("red");
+            td.classList.remove("orange", "red");
+            td.classList.add("green");
             setTimeout(() => td.classList.remove("green"), 1000);
             dirtyCells.delete(td);
+            dirtyValues.delete(key);
           })
           .catch(() => {
             td.classList.remove("orange");
@@ -170,41 +209,48 @@
       });
     });
 
-    function loadUsers() {
-      usersRef.on("value", (snapshot) => {
-        const users = snapshot.val();
-        const table = document.getElementById("user-table");
-        table.innerHTML = "";
+    function initListeners() {
+      // Real-time update patch: only update non-dirty cells
+      usersRef.on("child_changed", (snapshot) => {
+        const uid = snapshot.key;
+        const updatedUser = snapshot.val();
+        const row = document.querySelector(`tr[data-uid="${uid}"]`);
+        if (!row) return;
 
-        const headerRow = document.createElement("tr");
-        ["UID", "Display Name", "Email", "Gender", "Address"].forEach(text => {
-          const th = document.createElement("th");
-          th.textContent = text;
-          headerRow.appendChild(th);
+        ["displayName", "email", "gender", "address"].forEach(field => {
+          const td = row.querySelector(`td[data-field="${field}"]`);
+          const key = `${uid}:${field}`;
+          const isDirty = td?.classList.contains("orange");
+          if (td && !isDirty) {
+            td.textContent = updatedUser[field] ?? "";
+          }
         });
-        table.appendChild(headerRow);
+      });
 
-        for (const uid in users) {
-          const user = users[uid];
-          const row = document.createElement("tr");
-          row.dataset.uid = uid; // Set UID for reference later
-
-          const uidTd = document.createElement("td");
-          uidTd.textContent = uid;
-          row.appendChild(uidTd);
-
-          row.appendChild(createEditableCell(uid, "displayName", user.displayName));
-          row.appendChild(createEditableCell(uid, "email", user.email));
-          row.appendChild(createEditableCell(uid, "gender", user.gender));
-          row.appendChild(createEditableCell(uid, "address", user.address));
-
-          table.appendChild(row);
+      // Optional: handle new user added
+      usersRef.on("child_added", (snapshot) => {
+        const uid = snapshot.key;
+        const user = snapshot.val();
+        const existingRow = document.querySelector(`tr[data-uid="${uid}"]`);
+        if (!existingRow) {
+          const currentUsers = {};
+          currentUsers[uid] = user;
+          renderUsers(currentUsers);
         }
+      });
+
+      // Optional: handle user removed
+      usersRef.on("child_removed", (snapshot) => {
+        const uid = snapshot.key;
+        const row = document.querySelector(`tr[data-uid="${uid}"]`);
+        if (row) row.remove();
       });
     }
 
-    loadUsers();
+    usersRef.once("value").then(snapshot => {
+      renderUsers(snapshot.val());
+      initListeners();
+    });
   </script>
 </body>
 </html>
-
